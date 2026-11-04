@@ -1,0 +1,7 @@
+Flask
+Gunicorn
+SQLAlchemy
+psycopg2-binary
+numpy
+pandas
+pyarrow
