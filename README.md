@@ -101,6 +101,10 @@ python check_db.py --url "postgresql://<USER>:<PASSWORD>@<HOST>:5432/<DBNAME>"
 python create_db.py --url "postgresql://<USER>:<PASSWORD>@<HOST>:5432/<DBNAME>"
 ```
 
+The coordinate staging load uses PostgreSQL `COPY` in batches and prints row
+progress. When loading to a remote database, keep the terminal open until the
+loader prints `=== Ready ===`.
+
 ### 4) Deploy the Flask service
 
 Push the contents of this folder to a GitHub repository, then create a new

@@ -68,6 +68,33 @@ def is_finite_series(s: pd.Series) -> pd.Series:
     return np.isfinite(s.to_numpy(copy=False))
 
 
+def load_coordinates_stage(engine: Engine, df: pd.DataFrame, schema: str, chunksize: int):
+    if chunksize <= 0:
+        raise ValueError("stage-chunksize must be greater than zero.")
+
+    copy_sql = (
+        f"COPY {schema}.coordinates_stage (study_id, x, y, z) "
+        "FROM STDIN WITH (FORMAT CSV, NULL '\\N')"
+    )
+    raw = engine.raw_connection()
+    try:
+        with raw.cursor() as cursor:
+            for start in range(0, len(df), chunksize):
+                end = min(start + chunksize, len(df))
+                chunk = df.iloc[start:end]
+                buffer = io.StringIO()
+                chunk.to_csv(buffer, index=False, header=False, na_rep=r"\N")
+                buffer.seek(0)
+                cursor.copy_expert(copy_sql, buffer)
+                raw.commit()
+                print(f"   … staged {end:,}/{len(df):,} coordinate rows")
+    except Exception:
+        raw.rollback()
+        raise
+    finally:
+        raw.close()
+
+
 # -----------------------------
 # Coordinates (POINTZ + GIST)
 # -----------------------------
@@ -99,10 +126,10 @@ def build_coordinates(engine: Engine, df: pd.DataFrame, schema: str, chunksize: 
                 z DOUBLE PRECISION NOT NULL
             );
         """))
+        conn.execute(text(f"TRUNCATE TABLE {schema}.coordinates_stage;"))
 
-    print("→ coordinates: loading staging (to_sql)")
-    df.to_sql("coordinates_stage", engine, schema=schema, if_exists="append", index=False,
-              chunksize=chunksize, method="multi")
+    print("→ coordinates: loading staging (PostgreSQL COPY)")
+    load_coordinates_stage(engine, df, schema, chunksize)
 
     with engine.begin() as conn:
         conn.execute(text(f"""
